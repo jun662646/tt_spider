@@ -14,6 +14,12 @@ SPIDER_MODULES = ["tt_spider.spiders"]
 NEWSPIDER_MODULE = "tt_spider.spiders"
 
 LOG_LEVEL = 'WARNING'
+LOG_ENABLED = True
+LOG_STDOUT = True
+LOG_ENCODING='utf-8'
+to_day = datetime.now()
+# LOG_FILE = 'logs/tt_{}_{}_{}.log'.format(to_day.year, to_day.month, to_day.day)
+LOG_FILE_APPEND = True
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = "tt_spider (+http://www.yourdomain.com)"
