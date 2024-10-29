@@ -1,0 +1,47 @@
+# -*- mode: python -*-
+
+block_cipher = None
+
+# 以py文件为输入,分析py文件的依赖模块,并生成相应的信息
+a = Analysis(['start.py',
+        'tt_spider/spiders/tt.py',
+        'tt_spider/items.py',
+        'tt_spider/middlewares.py',
+        'tt_spider/pipelines.py',
+        'tt_spider/settings.py',
+        ], # 要打包.py文件名列表，和xxx.py同级可以不同添加
+       pathex=['C:\\work\\tt_spider\\tt_spider'], # 项目路径
+       binaries=[], # 程序调用外部pyd、dll文件（二进制文件路径）以数组形式传入;例:('D:\\pro\\text.dll', 'pro'),将'pdftotext.dll'pro，与原项目结构一致即可
+       datas=[], # 存放的资源文件（图片、文本等静态文件）以数组形成传入;例：('D:\\static\\c.ioc','static'),将'cc.ioc'打包之后放在static目录，与原项目结构一致即可
+       hiddenimports=['pandas','selenium','scrapy','tt_spider.settings','tt_spider.spiders','tt_spider.middlewares',
+            'tt_spider.pipelines','tt_spider.items'], # pyinstaller解析模块时可能会遗漏某些模块（not visible to the analysis phase），造成打包后执行程序时出现类似No Module named xxx;这时就需要在hiddenimports中加入遗漏的模块
+       hookspath=[],
+       runtime_hooks=[],
+       excludes=[], # 去除不必要的模块import，写在excludes中添加此模块
+       win_no_prefer_redirects=False,
+       win_private_assemblies=False,
+       cipher=block_cipher)
+
+# .pyz的压缩包，包含程序运行需要的所有依赖
+pyz = PYZ(a.pure, a.zipped_data,
+       cipher=block_cipher)
+
+# 根据Analysis和PYZ生成单个exe程序所需要的属性及其配置
+exe = EXE(pyz,
+     a.scripts,
+     exclude_binaries=True,
+     name='tt', # 生成exe文件的名字
+     debug=False, # debug模式
+     strip=False,
+     upx=True,
+     console=True, # 是否在打开exe文件时打开cmd命令框
+     icon='tt_icon_16.png' ) # 设置exe程序图标，ico格式文件（16*16）
+
+# 收集前三个部分的内容进行整合，生成程序所需要的依赖包，及资源文件和配置
+coll = COLLECT(exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        strip=False,
+        upx=True,
+        name='tt')
