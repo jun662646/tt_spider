@@ -1,6 +1,8 @@
 import logging
 import time
-from datetime import datetime
+from configparser import ConfigParser
+from datetime import datetime, timedelta
+from datetime import date
 
 import pandas as pd
 import scrapy
@@ -12,8 +14,14 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from tt_spider.items import TtItem
 
+# 自定义配置
+config = ConfigParser().read('scrapy.cfg')
+startDate = (datetime.strptime(config.get('tt', 'start'), '%Y-%m-%d')).date()
+endDate = (datetime.strptime(config.get('tt', 'end'), '%Y-%m-%d')).date()
+
 logger = logging.getLogger('tt')
 
+# xpath 常量
 X_VIDEOS = '//*[@data-e2e="user-post-item-list"]/div'
 X_VIDEO  = '//*[@data-e2e="user-post-item-list"]/div[1]'
 X_CLOSE_BUTTON = '//*[@data-e2e="browse-close"]'
@@ -28,6 +36,7 @@ X_VERIFY_CODE = '//*[starts-with(@id, ":")]/div/div[1]/div/button'
 X_REFRESH_BUTTON = '//*[@id="main-content-others_homepage"]/div/div[2]/main/div/button|//*[@id="main-content-others_homepage"]/div/main/div/button'
 X_LOGIN = '//*[@id="loginContainer"]/div/div/div[3]/div/div[2]'
 
+# webdriver配置
 options = Options()
 options.add_argument('--disable-blink-features=AutomationControlled')
 options.add_argument(f'--proxy-server=localhost:7890')
@@ -38,9 +47,9 @@ class TtSpider(scrapy.Spider):
 
     # 读取Excel文件
     df = pd.read_excel('tt.xlsx', engine='openpyxl')
-    urls = df['主页链接'].tolist()
+    urls = df.iloc[:, 2].tolist()
     start_urls = urls
-    # start_urls = ['https://www.tiktok.com/@chisooraa']
+    # start_urls = ['https://www.tiktok.com/@pipi.paw5']
 
     def __init__(self):
         self.driver = webdriver.Chrome(options=options)
@@ -70,6 +79,7 @@ class TtSpider(scrapy.Spider):
                 err2 = self.driver.find_elements(By.XPATH, X_REFRESH_BUTTON)
                 err3 = self.driver.find_elements(By.XPATH, X_LOGIN)
                 err4 = self.driver.find_elements(By.XPATH, X_ACCOUNT_ERROR)
+                err5 = self.driver.find_elements(By.XPATH, X_VIDEO)
                 if len(err1) > 0:
                     err1[0].click()
                     logger.warning("跳过验证码")
@@ -86,7 +96,7 @@ class TtSpider(scrapy.Spider):
                     errItem['备注'] = err4[0].text
                     yield errItem
                     break
-                else:
+                elif len(err5) > 0:
                     yield from self.run(name)
                     break
         except Exception as e:
@@ -94,7 +104,7 @@ class TtSpider(scrapy.Spider):
             errItem['账号名'] = name
             errItem['备注'] = '爬虫异常'
             yield errItem
-            logger.warning(e)
+            logger.exception(e)
         finally:
             logger.warning(f'本页剩余{self.count}')
 
@@ -123,18 +133,22 @@ class TtSpider(scrapy.Spider):
                 # 打开详情页
                 button.click()
                 # 日期
-                date = WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH, X_DATE))).text
-                if '-' in date:
+                dateTxt = WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH, X_DATE))).text
+                date = self.convertDate(dateTxt)
+                logger.warning('d=%s,start=%s,end=%s',date,startDate,endDate)
+                if date > endDate:
+                    self.driver.execute_script("arguments[0].remove();", button)
+                    continue
+                elif date < startDate:
                     if len(self.driver.find_elements(By.XPATH, X_PIN)) == 0:
-                        logger.warning("跳过置顶,%s", self.count)
                         break
                     else:
                         self.driver.execute_script("arguments[0].remove();", button)
+                        logger.warning("跳过置顶,%s", self.count)
                         continue
 
                 # 点赞数
-                likes = WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, X_LIKES))).text
+                likes = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, X_LIKES))).text
 
                 item = TtItem()
                 item['账号名'] = name
@@ -142,7 +156,6 @@ class TtSpider(scrapy.Spider):
                 item['播放'] = plays
                 item['点赞'] = likes
                 item['日期'] = date
-
                 yield item
 
                 # 使用 JavaScript 来删除元素
@@ -164,8 +177,31 @@ class TtSpider(scrapy.Spider):
                     logger.warning('divs:%s', len(divs))
                     self.count = len(divs)
             except Exception as e:
-                logger.warning('出现异常：%s,exception:%s', self.count, e)
-                pass
+                divs = self.driver.find_elements(By.XPATH, X_VIDEOS)
+                self.count = len(divs)
+                logger.exception('出现异常：%s,exception:%s', self.count, e)
+
+    def convertDate(self, dateTxt):
+        try:
+            now = datetime.now()
+            if '小时前' in dateTxt:
+                d = int(dateTxt.replace('小时前','').strip())
+                return (now - timedelta(hours=d)).date()
+            elif '天前' in dateTxt:
+                d = int(dateTxt.replace('天前','').strip())
+                return (now - timedelta(days=d)).date()
+            elif '周前' in dateTxt:
+                d = int(dateTxt.replace('周前','').strip())
+                return (now - timedelta(weeks=d)).date()
+            elif '-' in dateTxt:
+                d = dateTxt.split('-')
+                if len(d) == 2:
+                    return date(now.year, int(d[0]), int(d[1]))
+                elif len(d) == 3:
+                    return date(int(d[0]), int(d[1]), int(d[2]))
+        except Exception as e:
+            logger.exception("转换日期异常，date=%s, %s",dateTxt, e)
+            return None
 
     def closed(self, reason):
         if self.driver:
