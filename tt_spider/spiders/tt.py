@@ -13,28 +13,15 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from tt_spider.items import TtItem
-
-# 自定义配置
-config = ConfigParser().read('scrapy.cfg')
-startDate = (datetime.strptime(config.get('tt', 'start'), '%Y-%m-%d')).date()
-endDate = (datetime.strptime(config.get('tt', 'end'), '%Y-%m-%d')).date()
+from tt_spider.spiders.Constants import X
 
 logger = logging.getLogger('tt')
 
-# xpath 常量
-X_VIDEOS = '//*[@data-e2e="user-post-item-list"]/div'
-X_VIDEO  = '//*[@data-e2e="user-post-item-list"]/div[1]'
-X_CLOSE_BUTTON = '//*[@data-e2e="browse-close"]'
-X_DATE = '//*[@data-e2e="browser-nickname"]/span[3]'
-X_LIKES = '//*[@data-e2e="browse-like-count"]'
-# X_ACCOUNT_ERROR   = '//*[@class="css-1y4x9xk-PTitle emuynwa1"]'
-X_ACCOUNT_ERROR   = '//*[contains(@class, "emuynwa1")]'
-X_LIVE = '//*[@class="css-x6y88p-DivItemContainerV2 e19c29qe17"]'
-X_PIN = '//*[@data-e2e="video-card-badge"]'
-
-X_VERIFY_CODE = '//*[starts-with(@id, ":")]/div/div[1]/div/button'
-X_REFRESH_BUTTON = '//*[@id="main-content-others_homepage"]/div/div[2]/main/div/button|//*[@id="main-content-others_homepage"]/div/main/div/button'
-X_LOGIN = '//*[@id="loginContainer"]/div/div/div[3]/div/div[2]'
+# 自定义配置
+config = ConfigParser()
+config.read('scrapy.cfg')
+startDate = (datetime.strptime(config.get('tt', 'start'), '%Y-%m-%d')).date()
+endDate = (datetime.strptime(config.get('tt', 'end'), '%Y-%m-%d')).date()
 
 # webdriver配置
 options = Options()
@@ -65,21 +52,21 @@ class TtSpider(scrapy.Spider):
             while True:
                 WebDriverWait(self.driver, 30).until(EC.any_of(
                     # 正常账号
-                    EC.element_to_be_clickable((By.XPATH, X_VIDEO)),
+                    EC.element_to_be_clickable((By.XPATH, X.VIDEO)),
                     # 异常账号
-                    EC.visibility_of_element_located((By.XPATH, X_ACCOUNT_ERROR)),
+                    EC.visibility_of_element_located((By.XPATH, X.ACCOUNT_ERROR)),
                     # 验证码
-                    EC.visibility_of_element_located((By.XPATH, X_VERIFY_CODE)),
+                    EC.visibility_of_element_located((By.XPATH, X.VERIFY_CODE)),
                     # 刷新
-                    EC.visibility_of_element_located((By.XPATH, X_REFRESH_BUTTON)),
+                    EC.visibility_of_element_located((By.XPATH, X.REFRESH_BUTTON)),
                     # 游客登录
-                    EC.visibility_of_element_located((By.XPATH, X_LOGIN)),
+                    EC.visibility_of_element_located((By.XPATH, X.LOGIN)),
                 ))
-                err1 = self.driver.find_elements(By.XPATH, X_VERIFY_CODE)
-                err2 = self.driver.find_elements(By.XPATH, X_REFRESH_BUTTON)
-                err3 = self.driver.find_elements(By.XPATH, X_LOGIN)
-                err4 = self.driver.find_elements(By.XPATH, X_ACCOUNT_ERROR)
-                err5 = self.driver.find_elements(By.XPATH, X_VIDEO)
+                err1 = self.driver.find_elements(By.XPATH, X.VERIFY_CODE)
+                err2 = self.driver.find_elements(By.XPATH, X.REFRESH_BUTTON)
+                err3 = self.driver.find_elements(By.XPATH, X.LOGIN)
+                err4 = self.driver.find_elements(By.XPATH, X.ACCOUNT_ERROR)
+                err5 = self.driver.find_elements(By.XPATH, X.VIDEO)
                 if len(err1) > 0:
                     err1[0].click()
                     logger.warning("跳过验证码")
@@ -109,15 +96,15 @@ class TtSpider(scrapy.Spider):
             logger.warning(f'本页剩余{self.count}')
 
     def run(self, name):
-        divs = self.driver.find_elements(By.XPATH, X_VIDEOS)
+        divs = self.driver.find_elements(By.XPATH, X.VIDEOS)
         self.count = len(divs)
         logger.warning('divs: %s', self.count)
         while self.count > 0:
             try:
                 # 跳过直播
-                live = self.driver.find_elements(By.XPATH, X_LIVE)
+                live = self.driver.find_elements(By.XPATH, X.LIVE)
                 # 卡在详情页
-                close = self.driver.find_elements(By.XPATH, X_CLOSE_BUTTON)
+                close = self.driver.find_elements(By.XPATH, X.CLOSE_BUTTON)
                 if len(close) > 0:
                     close[0].click()
                     logger.warning("跳出详情,%s", self.count)
@@ -128,19 +115,19 @@ class TtSpider(scrapy.Spider):
                     continue
 
                 self.count -= 1
-                button = WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.XPATH, X_VIDEO)))
+                button = WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.XPATH, X.VIDEO)))
                 plays = button.text.replace('已置顶', '').replace('刚刚看过','').strip()
                 # 打开详情页
                 button.click()
                 # 日期
-                dateTxt = WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH, X_DATE))).text
+                dateTxt = WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH, X.DATE))).text
                 date = self.convertDate(dateTxt)
                 logger.warning('d=%s,start=%s,end=%s',date,startDate,endDate)
                 if date > endDate:
                     self.driver.execute_script("arguments[0].remove();", button)
                     continue
                 elif date < startDate:
-                    if len(self.driver.find_elements(By.XPATH, X_PIN)) == 0:
+                    if len(self.driver.find_elements(By.XPATH, X.PIN)) == 0:
                         break
                     else:
                         self.driver.execute_script("arguments[0].remove();", button)
@@ -148,7 +135,7 @@ class TtSpider(scrapy.Spider):
                         continue
 
                 # 点赞数
-                likes = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, X_LIKES))).text
+                likes = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, X.LIKES))).text
 
                 item = TtItem()
                 item['账号名'] = name
@@ -162,10 +149,10 @@ class TtSpider(scrapy.Spider):
                 self.driver.execute_script("arguments[0].remove();", button)
 
                 # 关闭详情页
-                button = self.driver.find_element(By.XPATH, X_CLOSE_BUTTON)
+                button = self.driver.find_element(By.XPATH, X.CLOSE_BUTTON)
                 button.click()
 
-                divs = self.driver.find_elements(By.XPATH, X_VIDEOS)
+                divs = self.driver.find_elements(By.XPATH, X.VIDEOS)
                 self.count = len(divs)
                 # 下一个视频
                 if self.count == 0:
@@ -173,11 +160,11 @@ class TtSpider(scrapy.Spider):
                     # 屏幕滚动
                     self.driver.execute_script("window.scrollBy(0, 1000)")
                     time.sleep(2)
-                    divs = self.driver.find_elements(By.XPATH, X_VIDEOS)
+                    divs = self.driver.find_elements(By.XPATH, X.VIDEOS)
                     logger.warning('divs:%s', len(divs))
                     self.count = len(divs)
             except Exception as e:
-                divs = self.driver.find_elements(By.XPATH, X_VIDEOS)
+                divs = self.driver.find_elements(By.XPATH, X.VIDEOS)
                 self.count = len(divs)
                 logger.exception('出现异常：%s,exception:%s', self.count, e)
 
